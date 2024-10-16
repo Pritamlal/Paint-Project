@@ -1,0 +1,243 @@
+package com.example.proj;
+
+import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.UUID;
+
+public class MainActivity extends AppCompatActivity {
+
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothSocket bluetoothSocket;
+    private BluetoothDevice bluetoothDevice;
+    private OutputStream outputStream;
+    private InputStream inputStream;
+    private EditText editTextInput;
+    private TextView textViewOutput;
+    private Button buttonConnect, buttonSend, buttonUp, buttonDown, buttonLeft, buttonRight;
+    private Button buttonExtra1, buttonExtra2, buttonExtra3;
+    private Spinner spinnerDevices;
+
+    private final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");  // Standard UUID for SPP
+
+    private ArrayAdapter<String> deviceListAdapter;
+    private ArrayList<BluetoothDevice> pairedDevicesList;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Initialize UI elements
+        spinnerDevices = findViewById(R.id.spinner_devices);
+        editTextInput = findViewById(R.id.editText_input);
+        textViewOutput = findViewById(R.id.textView_output);
+        buttonConnect = findViewById(R.id.button_connect);
+        buttonSend = findViewById(R.id.button_send);
+        buttonUp = findViewById(R.id.button_up);
+        buttonDown = findViewById(R.id.button_down);
+        buttonLeft = findViewById(R.id.button_left);
+        buttonRight = findViewById(R.id.button_right);
+        buttonExtra1 = findViewById(R.id.button_extra_1);
+        buttonExtra2 = findViewById(R.id.button_extra_2);
+        buttonExtra3 = findViewById(R.id.button_extra_3);
+
+        // Initialize Bluetooth Adapter
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        pairedDevicesList = new ArrayList<>();
+        deviceListAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
+        spinnerDevices.setAdapter(deviceListAdapter);
+
+        // List paired devices
+        listPairedDevices();
+
+        // Button listeners
+        buttonConnect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                connectToSelectedDevice();
+            }
+        });
+
+        buttonSend.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData(editTextInput.getText().toString());
+            }
+        });
+
+        buttonUp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("u");
+            }
+        });
+
+        buttonDown.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("d");
+            }
+        });
+
+        buttonLeft.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("l");
+            }
+        });
+
+        buttonRight.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("r");
+            }
+        });
+
+        // Additional button listeners
+        buttonExtra1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("o");
+            }
+        });
+
+        buttonExtra2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("s");
+            }
+        });
+
+        buttonExtra3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sendData("s");
+            }
+        });
+    }
+
+    // List paired devices
+    private void listPairedDevices() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+        if (pairedDevices.size() > 0) {
+            for (BluetoothDevice device : pairedDevices) {
+                pairedDevicesList.add(device);
+                deviceListAdapter.add(device.getName() + "\n" + device.getAddress());
+            }
+        } else {
+            deviceListAdapter.add("No paired devices found.");
+        }
+    }
+
+    // Connect to selected Bluetooth device
+    private void connectToSelectedDevice() {
+        int selectedIndex = spinnerDevices.getSelectedItemPosition();
+        if (selectedIndex == -1 || pairedDevicesList.isEmpty()) {
+            textViewOutput.setText("No device selected.");
+            return;
+        }
+
+        bluetoothDevice = pairedDevicesList.get(selectedIndex);
+
+        try {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return;
+            }
+            bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(MY_UUID);
+            bluetoothSocket.connect();
+            outputStream = bluetoothSocket.getOutputStream();
+            inputStream = bluetoothSocket.getInputStream();
+            textViewOutput.setText("Connected to " + bluetoothDevice.getName());
+            listenForData();
+        } catch (IOException e) {
+            textViewOutput.setText("Connection failed: " + e.getMessage());
+        }
+    }
+
+    // Send data to Bluetooth device
+    private void sendData(String data) {
+        if (outputStream != null) {
+            try {
+                outputStream.write(data.getBytes());
+                textViewOutput.append("\nSent: " + data);
+            } catch (IOException e) {
+                textViewOutput.setText("Error sending data: " + e.getMessage());
+            }
+        }
+    }
+
+    // Listen for incoming data
+    private void listenForData() {
+        new Thread(new Runnable() {
+            public void run() {
+                byte[] buffer = new byte[1024];
+                int bytes;
+
+                while (true) {
+                    try {
+                        if (inputStream.available() > 0) {
+                            bytes = inputStream.read(buffer);
+                            final String incomingMessage = new String(buffer, 0, bytes);
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    textViewOutput.append("\nReceived: " + incomingMessage);
+                                }
+                            });
+                        }
+                    } catch (IOException e) {
+                        textViewOutput.setText("Error receiving data: " + e.getMessage());
+                        break;
+                    }
+                }
+            }
+        }).start();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            if (bluetoothSocket != null) {
+                bluetoothSocket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
